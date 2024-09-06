@@ -3,7 +3,7 @@ from streamlit_tags import st_tags_sidebar
 import pandas as pd
 import json
 from datetime import datetime
-from scraper import fetch_html_selenium, save_raw_data, format_data, save_formatted_data, calculate_price,html_to_markdown_with_readability, create_dynamic_listing_model,create_listings_container_model
+from scraper import save_raw_data, format_data, save_formatted_data, calculate_price,html_to_markdown_with_readability, create_dynamic_listing_model,create_listings_container_model
 
 
 # Initialize Streamlit app
@@ -40,17 +40,29 @@ input_tokens = output_tokens = total_cost = 0  # Default values
 # Define the scraping function
 def perform_scrape():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    raw_html = fetch_html_selenium(url_input)
-    markdown = html_to_markdown_with_readability(raw_html)
+    markdown, screenshot_url, title, status_code = html_to_markdown_with_readability(url_input)
     save_raw_data(markdown, timestamp)
+    
+    if status_code == 200:
+        st.write(f"✅ Successfully Crawled {url_input}")
+        if screenshot_url:
+            st.image(screenshot_url, caption="Screenshot of the page")
+    else:
+        st.write(f'{url_input} doesn\'t return 200. Please double check.')
+
+    # Pydantic
     DynamicListingModel = create_dynamic_listing_model(fields)
     DynamicListingsContainer = create_listings_container_model(DynamicListingModel)
-    formatted_data = format_data(markdown, DynamicListingsContainer)
+
+    # LLM
+    formatted_data, prompt_tokens, completion_tokens = format_data(markdown, DynamicListingsContainer)
     formatted_data_text = json.dumps(formatted_data.dict())
-    input_tokens, output_tokens, total_cost = calculate_price(markdown, formatted_data_text, model=model_selection)
+
+    # Cost Calculation
+    input_tokens, output_tokens, total_cost = calculate_price(prompt_tokens, completion_tokens, model=model_selection)
     df = save_formatted_data(formatted_data, timestamp)
 
-    return df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp
+    return df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp, screenshot_url, title, status_code
 
 # Handling button press for scraping
 if 'perform_scrape' not in st.session_state:
@@ -62,7 +74,7 @@ if st.sidebar.button("Scrape"):
         st.session_state['perform_scrape'] = True
 
 if st.session_state.get('perform_scrape'):
-    df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp = st.session_state['results']
+    df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp, screenshot_url, title, status_code = st.session_state['results']
     # Display the DataFrame and other data
     st.write("Scraped Data:", df)
     st.sidebar.markdown("## Token Usage")
@@ -92,5 +104,5 @@ if st.session_state.get('perform_scrape'):
 
 # Ensure that these UI components are persistent and don't rely on re-running the scrape function
 if 'results' in st.session_state:
-    df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp = st.session_state['results']
+    df, formatted_data, markdown, input_tokens, output_tokens, total_cost, timestamp, screenshot_url, title, status_code = st.session_state['results']
         

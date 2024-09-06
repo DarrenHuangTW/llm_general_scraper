@@ -2,97 +2,34 @@ import os
 import time
 import re
 import json
-from datetime import datetime
 from typing import List, Dict, Type
+from firecrawl import FirecrawlApp
 
 import pandas as pd
-from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field, create_model
-import html2text
 import tiktoken
 
 from dotenv import load_dotenv
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
 
 from openai import OpenAI
 
 load_dotenv()
 
-# Set up the Chrome WebDriver options
-
-def setup_selenium():
-    options = Options()
-
-    # adding arguments
-    options.add_argument("--disable-gpu")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    
-    # Randomize user-agent to mimic different users
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-    # Specify the path to the ChromeDriver
-    service = Service(r"./chromedriver-win64/chromedriver.exe")  
-
-    # Initialize the WebDriver
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
-
-def fetch_html_selenium(url):
-    driver = setup_selenium()
+def html_to_markdown_with_readability(url_input):
+    app = FirecrawlApp(api_key="fc-303c4042c26340ba9afcddf153f57c64")
+    scrape_result = app.scrape_url(url_input, params={'formats': ['markdown','screenshot']})
+    markdown = scrape_result['markdown']
     try:
-        driver.get(url)
-        
-        # Add random delays to mimic human behavior
-        time.sleep(5)  # Adjust this to simulate time for user to read or interact
-        
-        # Add more realistic actions like scrolling
-        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-        time.sleep(3)  # Simulate time taken to scroll and read
-        
-        html = driver.page_source
-        return html
-    finally:
-        driver.quit()
-
-def clean_html(html_content):
-    soup = BeautifulSoup(html_content, 'html.parser')
+        screenshot_url = scrape_result['screenshot']
+    except KeyError:
+        screenshot_url = None
+    metadata = scrape_result['metadata']
+    title = metadata.get('title')
+    status_code = metadata.get('statusCode')
     
-    # Remove headers and footers based on common HTML tags or classes
-    for element in soup.find_all(['header', 'footer']):
-        element.decompose()  # Remove these tags and their content
-
-    return str(soup)
+    return markdown, screenshot_url, title, status_code
 
 
-def html_to_markdown_with_readability(html_content):
-
-    
-    cleaned_html = clean_html(html_content)  
-    
-    # Convert to markdown
-    markdown_converter = html2text.HTML2Text()
-    markdown_converter.ignore_links = False
-    markdown_content = markdown_converter.handle(cleaned_html)
-    
-    return markdown_content
-
-# Define the pricing for gpt-4o-mini without Batch API
-pricing = {
-    "gpt-4o-mini": {
-        "input": 0.150 / 1_000_000,  # $0.150 per 1M input tokens
-        "output": 0.600 / 1_000_000, # $0.600 per 1M output tokens
-    },
-    "gpt-4o-2024-08-06": {
-        "input": 2.5 / 1_000_000,  # $0.150 per 1M input tokens
-        "output": 10 / 1_000_000, # $0.600 per 1M output tokens
-    },
-
-
-    # Add other models and their prices here if needed
-}
 
 model_used="gpt-4o-mini"
     
@@ -149,7 +86,6 @@ def create_listings_container_model(listing_model: Type[BaseModel]) -> Type[Base
 
 
 
-
 def trim_to_token_limit(text, model, max_tokens=200000):
     encoder = tiktoken.encoding_for_model(model)
     tokens = encoder.encode(text)
@@ -159,8 +95,6 @@ def trim_to_token_limit(text, model, max_tokens=200000):
     return text
 
 def format_data(data, DynamicListingsContainer):
-
-
 
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -180,9 +114,11 @@ def format_data(data, DynamicListingsContainer):
         ],
         response_format=DynamicListingsContainer
     )
-    return completion.choices[0].message.parsed
-    
 
+    prompt_tokens = completion.usage.prompt_tokens
+    completion_tokens = completion.usage.completion_tokens
+
+    return completion.choices[0].message.parsed, prompt_tokens, completion_tokens
 
 
 def save_formatted_data(formatted_data, timestamp, output_folder='output'):
@@ -222,71 +158,25 @@ def save_formatted_data(formatted_data, timestamp, output_folder='output'):
         print(f"Error creating DataFrame or saving Excel: {str(e)}")
         return None
 
-def get_token_model(model_name):
-    if model_name == "gpt-4o-mini":
-        return "gpt-3.5-turbo"  # or another appropriate model
-    elif model_name == "gpt-4o-2024-08-06":
-        return "gpt-4"  # or another appropriate model
-    return model_name
 
-def calculate_price(input_text, output_text, model=model_used):
-    # Initialize the encoder for the specific model
-    token_model = get_token_model(model)
-    encoder = tiktoken.encoding_for_model(token_model)
-    
-    # Encode the input text to get the number of input tokens
-    input_token_count = len(encoder.encode(input_text))
-    
-    # Encode the output text to get the number of output tokens
-    output_token_count = len(encoder.encode(output_text))
-    
+def calculate_price(prompt_tokens, completion_tokens, model=model_used):
+    # Define the pricing
+    # https://openai.com/api/pricing/
+
+    pricing = {
+        "gpt-4o-mini": {
+            "input": 0.150 / 1_000_000,  # $0.150 per 1M input tokens
+            "output": 0.600 / 1_000_000, # $0.600 per 1M output tokens
+        },
+        "gpt-4o-2024-08-06": {
+            "input": 2.5 / 1_000_000,  # $0.150 per 1M input tokens
+            "output": 10 / 1_000_000, # $0.600 per 1M output tokens
+        },
+        # Add other models and their prices here if needed
+    }
     # Calculate the costs
-    input_cost = input_token_count * pricing[model]["input"]
-    output_cost = output_token_count * pricing[model]["output"]
+    input_cost = prompt_tokens * pricing[model]["input"]
+    output_cost = completion_tokens * pricing[model]["output"]
     total_cost = input_cost + output_cost
     
-    return input_token_count, output_token_count, total_cost
-
-
-
-
-if __name__ == "__main__":
-    url = 'https://news.ycombinator.com/'
-    fields=['Title', 'Number of Points', 'Creator', 'Time Posted', 'Number of Comments']
-
-    try:
-        # # Generate timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        
-        # Scrape data
-        raw_html = fetch_html_selenium(url)
-    
-        markdown = html_to_markdown_with_readability(raw_html)
-        
-        # Save raw data
-        save_raw_data(markdown, timestamp)
-
-        # Create the dynamic listing model
-        DynamicListingModel = create_dynamic_listing_model(fields)
-
-        # Create the container model that holds a list of the dynamic listing models
-        DynamicListingsContainer = create_listings_container_model(DynamicListingModel)
-        
-        # Format data
-        formatted_data = format_data(markdown, DynamicListingsContainer)  # Use markdown, not raw_html
-        
-        # Save formatted data
-        save_formatted_data(formatted_data, timestamp)
-
-        # Convert formatted_data back to text for token counting
-        formatted_data_text = json.dumps(formatted_data.dict()) 
-        
-        
-        # Automatically calculate the token usage and cost for all input and output
-        input_tokens, output_tokens, total_cost = calculate_price(markdown, formatted_data_text, model=model_used)
-        print(f"Input token count: {input_tokens}")
-        print(f"Output token count: {output_tokens}")
-        print(f"Estimated total cost: ${total_cost:.4f}")
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+    return prompt_tokens, completion_tokens, total_cost
