@@ -4,9 +4,8 @@ import re
 import json
 from typing import List, Dict, Type
 from firecrawl import FirecrawlApp
-
 import pandas as pd
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, create_model
 import tiktoken
 
 from dotenv import load_dotenv
@@ -28,11 +27,8 @@ def html_to_markdown_with_readability(url_input):
     status_code = metadata.get('statusCode')
     
     return markdown, screenshot_url, title, status_code
-
-
-
-model_used="gpt-4o-mini"
     
+
 def save_raw_data(raw_data, timestamp, output_folder='output'):
     # Ensure the output folder exists
     os.makedirs(output_folder, exist_ok=True)
@@ -43,28 +39,6 @@ def save_raw_data(raw_data, timestamp, output_folder='output'):
         f.write(raw_data)
     print(f"Raw data saved to {raw_output_path}")
     return raw_output_path
-
-
-def remove_urls_from_file(file_path):
-    # Regex pattern to find URLs
-    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-
-    # Construct the new file name
-    base, ext = os.path.splitext(file_path)
-    new_file_path = f"{base}_cleaned{ext}"
-
-    # Read the original markdown content
-    with open(file_path, 'r', encoding='utf-8') as file:
-        markdown_content = file.read()
-
-    # Replace all found URLs with an empty string
-    cleaned_content = re.sub(url_pattern, '', markdown_content)
-
-    # Write the cleaned content to a new file
-    with open(new_file_path, 'w', encoding='utf-8') as file:
-        file.write(cleaned_content)
-    print(f"Cleaned file saved as: {new_file_path}")
-    return cleaned_content
 
 
 def create_dynamic_listing_model(field_names: List[str]) -> Type[BaseModel]:
@@ -78,12 +52,12 @@ def create_dynamic_listing_model(field_names: List[str]) -> Type[BaseModel]:
     return create_model('DynamicListingModel', **field_definitions)
 
 
+
 def create_listings_container_model(listing_model: Type[BaseModel]) -> Type[BaseModel]:
     """
     Create a container model that holds a list of the given listing model.
     """
     return create_model('DynamicListingsContainer', listings=(List[listing_model], ...))
-
 
 
 def trim_to_token_limit(text, model, max_tokens=200000):
@@ -93,6 +67,7 @@ def trim_to_token_limit(text, model, max_tokens=200000):
         trimmed_text = encoder.decode(tokens[:max_tokens])
         return trimmed_text
     return text
+
 
 def format_data(data, DynamicListingsContainer):
 
