@@ -69,7 +69,7 @@ def trim_to_token_limit(text, model, max_tokens=200000):
     return text
 
 
-def format_data(data, DynamicListingsContainer):
+def format_data(data, DynamicListingsContainer, model_used):
 
     client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
 
@@ -134,7 +134,7 @@ def save_formatted_data(formatted_data, timestamp, output_folder='output'):
         return None
 
 
-def calculate_price(prompt_tokens, completion_tokens, model=model_used):
+def calculate_price(prompt_tokens, completion_tokens, model):
     # Define the pricing
     # https://openai.com/api/pricing/
 

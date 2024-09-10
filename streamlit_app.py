@@ -55,7 +55,7 @@ def perform_scrape():
     DynamicListingsContainer = create_listings_container_model(DynamicListingModel)
 
     # LLM
-    formatted_data, prompt_tokens, completion_tokens = format_data(markdown, DynamicListingsContainer)
+    formatted_data, prompt_tokens, completion_tokens = format_data(markdown, DynamicListingsContainer, model_selection)
     formatted_data_text = json.dumps(formatted_data.dict())
 
     # Cost Calculation
