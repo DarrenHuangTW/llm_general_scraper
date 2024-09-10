@@ -7,8 +7,8 @@ from scraper import save_raw_data, format_data, save_formatted_data, calculate_p
 
 
 # Initialize Streamlit app
-st.set_page_config(page_title="Universal Web Scraper")
-st.title("Universal Web Scraper 🦑")
+st.set_page_config(page_title="🕷️ LLM Universal Web Scraper")
+st.title("🕷️ LLM Universal Web Scraper ")
 
 # Sidebar components
 st.sidebar.title("Web Scraper Settings")
@@ -19,12 +19,10 @@ url_input = st.sidebar.text_input("Enter URL")
 # Tags input specifically in the sidebar
 tags = st.sidebar.empty()  # Create an empty placeholder in the sidebar
 tags = st_tags_sidebar(
-    label='Enter Fields to Extract:',
+    label='Describe what to extract with natural language:',
     text='Press enter to add a tag',
-    value=[],  # Default values if any
-    suggestions=[],  # You can still offer suggestions, or keep it empty for complete freedom
-    maxtags=-1,  # Set to -1 for unlimited tags
-    key='tags_input'
+    # value=[],  # Default values if any
+    # key='tags_input'
 )
 
 
